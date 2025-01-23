@@ -41,13 +41,44 @@ router.get("/", async (req, res) => {
 
 // Add a new doctor with initialized slots
 router.post("/", async (req, res) => {
-  const { name, specialization, email } = req.body; // `dates` is now optional
+  const { name, specialization, email, phoneNumber, gender, dateOfBirth } =
+    req.body;
+  console.log({
+    name,
+    specialization,
+    email,
+    phoneNumber,
+    gender,
+    dateOfBirth,
+  });
 
   try {
-    if (!name || !specialization || !email) {
+    // Validate required fields
+    if (
+      !name ||
+      !specialization ||
+      !email ||
+      !phoneNumber ||
+      !gender ||
+      !dateOfBirth
+    ) {
       return res.status(400).json({
-        message: "Name, specialization, and email are required.",
+        message:
+          "Name, specialization, email, phoneNumber, gender, and dateOfBirth are required.",
       });
+    }
+
+    // Ensure `gender` matches the allowed enum values
+    if (!["male", "female"].includes(gender)) {
+      return res
+        .status(400)
+        .json({ message: "Invalid gender. Must be 'male' or 'female'." });
+    }
+
+    // Ensure `dateOfBirth` is a valid date
+    const dob = new Date(dateOfBirth);
+    if (isNaN(dob.getTime())) {
+      return res.status(400).json({ message: "Invalid date of birth format." });
     }
 
     // Initialize availability
@@ -56,9 +87,9 @@ router.post("/", async (req, res) => {
     const currentMinute = now.getMinutes();
 
     const today = now.toISOString().split("T")[0]; // Current date
-    const tomorrow = new Date(now.getTime() + 86400000)
+    const tomorrow = new Date(now.getTime() + 86400000) // Next day
       .toISOString()
-      .split("T")[0]; // Next day
+      .split("T")[0];
 
     // Generate slots for today starting from the current time
     const startToday = new Date(
@@ -81,7 +112,17 @@ router.post("/", async (req, res) => {
       { date: tomorrow, slots: tomorrowSlots },
     ];
 
-    const doctor = new Doctor({ name, specialization, availability, email });
+    // Create the doctor
+    const doctor = new Doctor({
+      name,
+      specialization,
+      email,
+      phoneNumber,
+      gender,
+      dateOfBirth: dob,
+      availability,
+    });
+
     await doctor.save();
 
     res.status(201).json(doctor);
