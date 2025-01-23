@@ -1,21 +1,28 @@
 const mongoose = require("mongoose");
 
-const doctorSchema = new mongoose.Schema({
-  name: String,
-  specialization: String,
-  email: String,
-  availability: [
-    {
-      date: String, // e.g., "2025-01-19"
-      slots: [
-        {
-          time: String, // e.g., "9:00 AM"
-          available: Boolean,
-        },
-      ],
-    },
-  ],
-});
+const doctorSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    phoneNumber: { type: String, required: true },
+    dateOfBirth: { type: Date, required: true },
+    specialization: { type: String, required: true },
+    gender: { type: String, enum: ["male", "female"], required: true },
+    accountType: { type: String, default: "doctor" },
+    availability: [
+      {
+        date: String, // Date for availability
+        slots: [
+          {
+            time: String, // Time slot
+            available: Boolean, // Availability status
+          },
+        ],
+      },
+    ],
+  },
+  { timestamps: true }
+); // Automatically adds `createdAt` and `updatedAt` fields
 
 const Doctor = mongoose.model("Doctor", doctorSchema);
 
