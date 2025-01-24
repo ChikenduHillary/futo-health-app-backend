@@ -14,10 +14,31 @@ router.get("/", async (req, res) => {
 
 // Add a new patient
 router.post("/", async (req, res) => {
-  const { name, email } = req.body;
+  const {
+    name,
+    email,
+    phoneNumber,
+    dateOfBirth,
+    gender,
+    healthInfo,
+    conditions,
+    medicalHistory,
+    accountType,
+  } = req.body;
 
   try {
-    const newPatient = new Patient({ name, email });
+    const newPatient = new Patient({
+      name,
+      email,
+      phoneNumber,
+      dateOfBirth,
+      gender,
+      healthInfo,
+      conditions,
+      medicalHistory,
+      accountType,
+    });
+
     await newPatient.save();
     res.status(201).json(newPatient);
   } catch (err) {
