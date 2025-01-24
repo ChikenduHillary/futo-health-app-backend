@@ -5,7 +5,7 @@ const PatientSchema = new mongoose.Schema({
   email: { type: String, required: true }, // Email address
   phoneNumber: { type: String, required: true }, // Phone number
   dateOfBirth: { type: Date, required: true }, // Date of birth
-  gender: { type: String, required: true, enum: ["Male", "Female"] }, // Gender with validation
+  gender: { type: String, required: true, enum: ["male", "female"] }, // Gender with validation
   healthInfo: { type: String, default: "" }, // Optional health information
   conditions: { type: String, default: "" }, // Optional pre-existing conditions
   medicalHistory: { type: String, default: "" }, // Optional medical history

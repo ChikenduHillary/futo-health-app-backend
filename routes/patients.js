@@ -23,7 +23,6 @@ router.post("/", async (req, res) => {
     healthInfo,
     conditions,
     medicalHistory,
-    accountType,
   } = req.body;
 
   try {
@@ -36,7 +35,7 @@ router.post("/", async (req, res) => {
       healthInfo,
       conditions,
       medicalHistory,
-      accountType,
+      accountType: "patient",
     });
 
     await newPatient.save();
