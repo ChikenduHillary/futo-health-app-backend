@@ -3,56 +3,50 @@ const router = express.Router();
 const Appointment = require("../models/Appointment");
 const Doctor = require("../models/Doctor");
 
-// Check availability or generate slots dynamically
-async function getOrCreateAvailability(doctor, date) {
-  // Check if the date already exists in the doctor's availability
-  let availability = doctor.availability.find((a) => a.date === date);
+// Generate slots for a specific date
+function generateSlots(doctor, date) {
+  const slots = [];
+  const startHour = 4; // 4:00 AM
+  const endHour = 21; // 9:00 PM
 
-  if (!availability) {
-    // If not, generate slots for the given date
-    const slots = generateSlots("09:00 AM", "04:00 PM");
-    availability = { date, slots };
-    doctor.availability.push(availability);
-    await doctor.save();
+  // Clear previous day's appointments
+  const today = new Date().toISOString().split("T")[0];
+  if (date !== today) {
+    doctor.availability = doctor.availability.filter((a) => a.date === today);
   }
 
-  return availability;
-}
+  // Check existing booked appointments for the day
+  const bookedAppointments = doctor.appointments.filter(
+    (app) => app.date === date && app.status !== "cancelled"
+  );
 
-function generateSlots(start, end) {
-  const slots = [];
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let minute of [0, 30]) {
+      const time = new Date();
+      time.setHours(hour, minute, 0, 0);
 
-  // Get the current date and set start and end times
-  const currentDate = new Date();
-  const startTime = new Date(currentDate);
-  const endTime = new Date(currentDate);
+      const timeString = time.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
 
-  // Parse start and end times (e.g., "09:00 AM", "04:00 PM")
-  const [startHours, startMinutes] = start.split(":").map(Number);
-  const [endHours, endMinutes] = end.split(":").map(Number);
+      // Check if this slot is already booked
+      const isBooked = bookedAppointments.some(
+        (app) => app.time === timeString
+      );
 
-  // Set the hours and minutes for start and end times
-  startTime.setHours(startHours, startMinutes, 0, 0);
-  endTime.setHours(endHours, endMinutes, 0, 0);
-
-  // Generate time slots between start and end times
-  let currentTime = new Date(startTime);
-  while (currentTime < endTime) {
-    const timeString = currentTime.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-
-    slots.push({ time: timeString, available: true });
-
-    // Add 15 minutes (10 mins appointment + 5 mins rest)
-    currentTime.setMinutes(currentTime.getMinutes() + 15);
+      slots.push({
+        time: timeString,
+        available: !isBooked,
+      });
+    }
   }
 
   return slots;
 }
 
+// Get available and booked slots for a specific doctor and date
 router.get("/slots", async (req, res) => {
   const { doctorId, date } = req.query;
 
@@ -63,18 +57,20 @@ router.get("/slots", async (req, res) => {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // Check if availability exists for the requested date
-    let availability = doctor.availability.find((a) => a.date === date);
+    // Generate slots for the day
+    const slots = generateSlots(doctor, date);
 
-    // If no availability for the date, initialize it
-    if (!availability) {
-      const newSlots = initializeSlots();
-      availability = { date, slots: newSlots };
-      doctor.availability.push(availability);
-      await doctor.save();
-    }
+    // Find booked appointments for the day
+    const bookedAppointments = await Appointment.find({
+      doctorId,
+      date,
+      status: { $ne: "cancelled" },
+    });
 
-    res.json(availability.slots);
+    res.json({
+      availableSlots: slots.filter((slot) => slot.available),
+      bookedSlots: bookedAppointments,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -85,30 +81,57 @@ router.post("/", async (req, res) => {
   const { doctorId, patientId, date, time } = req.body;
 
   try {
-    // Find the doctor
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // Get or create availability for the requested date
-    const availability = await getOrCreateAvailability(doctor, date);
+    // Check if the slot is available
+    const existingAppointment = await Appointment.findOne({
+      doctorId,
+      date,
+      time,
+      status: { $ne: "cancelled" },
+    });
 
-    // Check if the requested time slot is available
-    const slot = availability.slots.find((s) => s.time === time && s.available);
-    if (!slot) {
-      return res.status(400).json({ message: "Slot not available" });
+    if (existingAppointment) {
+      return res.status(400).json({ message: "Slot already booked" });
     }
 
-    // Mark the slot as unavailable
-    slot.available = false;
-    await doctor.save();
-
     // Create the appointment
-    const appointment = new Appointment({ doctorId, patientId, date, time });
+    const appointment = new Appointment({
+      doctorId,
+      patientId,
+      date,
+      time,
+      status: "booked",
+    });
     await appointment.save();
 
     res.status(201).json(appointment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cancel an appointment
+router.put("/cancel/:appointmentId", async (req, res) => {
+  const { appointmentId } = req.params;
+
+  try {
+    const appointment = await Appointment.findById(appointmentId);
+
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+
+    appointment.status = "cancelled";
+    await appointment.save();
+
+    res.status(200).json({
+      message: "Appointment cancelled successfully",
+      appointment,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

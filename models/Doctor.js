@@ -11,18 +11,24 @@ const doctorSchema = new mongoose.Schema(
     accountType: { type: String, default: "doctor" },
     availability: [
       {
-        date: String, // Date for availability
+        date: { type: String, required: true },
         slots: [
           {
-            time: String, // Time slot
-            available: Boolean, // Availability status
+            time: { type: String, required: true },
+            available: { type: Boolean, default: true },
           },
         ],
       },
     ],
+    appointments: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Appointment",
+      },
+    ],
   },
   { timestamps: true }
-); // Automatically adds `createdAt` and `updatedAt` fields
+);
 
 const Doctor = mongoose.model("Doctor", doctorSchema);
 

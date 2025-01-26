@@ -2,28 +2,28 @@ const express = require("express");
 const router = express.Router();
 const Doctor = require("../models/Doctor");
 
-function initializeSlots(date) {
-  // Ensure the date is in the correct format (e.g., "YYYY-MM-DD")
-  const parsedDate = new Date(date);
-
-  if (isNaN(parsedDate)) {
-    throw new Error("Invalid date format. Expected format: YYYY-MM-DD");
-  }
-
-  // Set the time to 09:00:00
-  const startTime = new Date(parsedDate.setHours(9, 0, 0, 0)); // 9:00 AM
-  const endTime = new Date(parsedDate.setHours(16, 0, 0, 0)); // 4:00 PM
-
+// Generate slots with updated requirements
+function generateSlots() {
   const slots = [];
+  const startHour = 4; // 4:00 AM
+  const endHour = 21; // 9:00 PM
 
-  while (startTime < endTime) {
-    const slotTime = startTime.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    slots.push({ time: slotTime, available: true });
-    startTime.setMinutes(startTime.getMinutes() + 10); // Add 10 minutes for appointment
-    startTime.setMinutes(startTime.getMinutes() + 5); // Add 5 minutes for rest
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let minute of [0, 30]) {
+      const time = new Date();
+      time.setHours(hour, minute, 0, 0);
+
+      const timeString = time.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      slots.push({
+        time: timeString,
+        available: true,
+      });
+    }
   }
 
   return slots;
@@ -39,18 +39,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Add a new doctor with initialized slots
+// Add a new doctor
 router.post("/", async (req, res) => {
   const { name, specialization, email, phoneNumber, gender, dateOfBirth } =
     req.body;
-  console.log({
-    name,
-    specialization,
-    email,
-    phoneNumber,
-    gender,
-    dateOfBirth,
-  });
 
   try {
     // Validate required fields
@@ -64,52 +56,32 @@ router.post("/", async (req, res) => {
     ) {
       return res.status(400).json({
         message:
-          "Name, specialization, email, phoneNumber, gender, and dateOfBirth are required.",
+          "All fields are required: name, specialization, email, phoneNumber, gender, and dateOfBirth",
       });
     }
 
-    // Ensure `gender` matches the allowed enum values
+    // Validate gender
     if (!["male", "female"].includes(gender)) {
       return res
         .status(400)
         .json({ message: "Invalid gender. Must be 'male' or 'female'." });
     }
 
-    // Ensure `dateOfBirth` is a valid date
+    // Validate date of birth
     const dob = new Date(dateOfBirth);
     if (isNaN(dob.getTime())) {
       return res.status(400).json({ message: "Invalid date of birth format." });
     }
 
-    // Initialize availability
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    const today = now.toISOString().split("T")[0]; // Current date
-    const tomorrow = new Date(now.getTime() + 86400000) // Next day
+    // Generate slots for today and tomorrow
+    const today = new Date().toISOString().split("T")[0];
+    const tomorrow = new Date(Date.now() + 86400000)
       .toISOString()
       .split("T")[0];
 
-    // Generate slots for today starting from the current time
-    const startToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      Math.max(9, currentHour), // Start at 9 AM or current hour, whichever is later
-      currentMinute > 0 ? 15 * Math.ceil(currentMinute / 15) : 0 // Round to next 15-minute mark
-    );
-
-    const todaySlots =
-      currentHour < 16 ? generateSlots(startToday, "04:00 PM") : []; // Slots only if before 4 PM
-
-    // Generate slots for tomorrow (full availability)
-    const tomorrowSlots = generateSlots("09:00 AM", "04:00 PM");
-
-    // Prepare availability
     const availability = [
-      { date: today, slots: todaySlots },
-      { date: tomorrow, slots: tomorrowSlots },
+      { date: today, slots: generateSlots() },
+      { date: tomorrow, slots: generateSlots() },
     ];
 
     // Create the doctor
@@ -121,6 +93,7 @@ router.post("/", async (req, res) => {
       gender,
       dateOfBirth: dob,
       availability,
+      appointments: [],
     });
 
     await doctor.save();
@@ -129,29 +102,33 @@ router.post("/", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
 
-  // Utility function to generate time slots
-  function generateSlots(start, end) {
-    const slots = [];
-    const startTime =
-      typeof start === "string" ? new Date(`1970-01-01T${start}`) : start;
-    const endTime = new Date(`1970-01-01T${end}`);
+// Update doctor availability
+router.put("/:id/availability", async (req, res) => {
+  const { id } = req.params;
+  const { date } = req.body;
 
-    let currentTime = new Date(startTime);
-    while (currentTime < endTime) {
-      const timeString = currentTime.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
-
-      slots.push({ time: timeString, available: true });
-
-      // Add 15 minutes (10 mins appointment + 5 mins rest)
-      currentTime.setMinutes(currentTime.getMinutes() + 15);
+  try {
+    const doctor = await Doctor.findById(id);
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor not found" });
     }
 
-    return slots;
+    // Remove old availability for the specific date
+    doctor.availability = doctor.availability.filter((a) => a.date !== date);
+
+    // Add new availability for the date
+    doctor.availability.push({
+      date,
+      slots: generateSlots(),
+    });
+
+    await doctor.save();
+
+    res.json(doctor);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
