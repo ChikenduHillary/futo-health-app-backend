@@ -48,29 +48,73 @@ function generateSlots(doctor, date) {
 
 // Get available and booked slots for a specific doctor and date
 router.get("/slots", async (req, res) => {
-  const { doctorId, date } = req.query;
+  const { doctorId, patientId, date } = req.query;
 
   try {
-    const doctor = await Doctor.findById(doctorId);
-
-    if (!doctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+    // Validate input: Ensure either doctorId or patientId is provided
+    if ((!doctorId && !patientId) || (doctorId && patientId)) {
+      return res.status(400).json({
+        message: "Please provide either doctorId or patientId, but not both.",
+      });
     }
 
-    // Generate slots for the day
-    const slots = generateSlots(doctor, date);
+    // Validate ObjectId for doctorId or patientId
+    const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id); // Regex for MongoDB ObjectId
 
-    // Find booked appointments for the day
-    const bookedAppointments = await Appointment.find({
-      doctorId,
-      date,
-      status: { $ne: "cancelled" },
-    });
+    if (doctorId && !isValidObjectId(doctorId)) {
+      return res.status(400).json({ message: "Invalid doctorId format." });
+    }
 
-    res.json({
-      availableSlots: slots.filter((slot) => slot.available),
-      bookedSlots: bookedAppointments,
-    });
+    if (patientId && !isValidObjectId(patientId)) {
+      return res.status(400).json({ message: "Invalid patientId format." });
+    }
+
+    if (!date) {
+      return res.status(400).json({ message: "Date parameter is required." });
+    }
+
+    if (doctorId) {
+      // Fetch doctor and their slots
+      const doctor = await Doctor.findById(doctorId);
+      if (!doctor) {
+        return res.status(404).json({ message: "Doctor not found." });
+      }
+
+      const slots = generateSlots(doctor, date);
+      const bookedAppointments = await Appointment.find({
+        doctorId,
+        date,
+        status: { $ne: "cancelled" },
+      });
+
+      return res.json({
+        type: "doctor",
+        availableSlots: slots.filter((slot) => slot.available),
+        bookedSlots: bookedAppointments,
+      });
+    }
+
+    if (patientId) {
+      // Fetch appointments for the patient
+      const patientAppointments = await Appointment.find({
+        patientId,
+        date,
+      });
+
+      console.log(patientAppointments);
+
+      if (!patientAppointments.length) {
+        return res.status(404).json({
+          message:
+            "No appointments found for this patient on the selected date.",
+        });
+      }
+
+      return res.json({
+        type: "patient",
+        appointments: patientAppointments,
+      });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -132,6 +176,71 @@ router.put("/cancel/:appointmentId", async (req, res) => {
       message: "Appointment cancelled successfully",
       appointment,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/all", async (req, res) => {
+  const { doctorId, patientId } = req.query;
+
+  try {
+    // Validate that at least one ID is provided
+    if (!doctorId && !patientId) {
+      return res
+        .status(400)
+        .json({ message: "Provide either doctorId or patientId." });
+    }
+
+    // Validate ObjectIds
+    const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+    if (doctorId && !isValidObjectId(doctorId)) {
+      return res.status(400).json({ message: "Invalid doctorId." });
+    }
+    if (patientId && !isValidObjectId(patientId)) {
+      return res.status(400).json({ message: "Invalid patientId." });
+    }
+
+    // Build the query object
+    const query = {};
+    if (doctorId) query.doctorId = doctorId;
+    if (patientId) query.patientId = patientId;
+
+    // Find all appointments that match the query
+    const appointments = await Appointment.find(query)
+      .populate("doctorId", "name specialty") // Populate doctor details
+      .populate("patientId", "name email") // Populate patient details
+      .sort({ date: 1, time: 1 }); // Sort by date and time in ascending order
+
+    if (!appointments.length) {
+      return res.status(404).json({ message: "No appointments found." });
+    }
+
+    // Separate appointments into past, present, and future
+    const now = new Date();
+    const past = [];
+    const present = [];
+    const future = [];
+
+    appointments.forEach((appointment) => {
+      const appointmentDateTime = new Date(
+        `${appointment.date}T${appointment.time}`
+      );
+      if (appointmentDateTime < now) {
+        past.push(appointment);
+      } else if (
+        appointmentDateTime.toDateString() === now.toDateString() &&
+        appointmentDateTime.getHours() === now.getHours() &&
+        appointmentDateTime.getMinutes() === now.getMinutes()
+      ) {
+        present.push(appointment);
+      } else {
+        future.push(appointment);
+      }
+    });
+
+    // Respond with categorized appointments
+    res.json({ past, present, future });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
