@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/Appointment");
 const Doctor = require("../models/Doctor");
+const Patient = require("../models/Patient");
+const Notification = require("../models/Notification");
 
 // Generate slots for a specific date
 function generateSlots(doctor, date) {
@@ -122,7 +124,7 @@ router.get("/slots", async (req, res) => {
 
 // Book an appointment
 router.post("/", async (req, res) => {
-  const { doctorId, patientId, date, time } = req.body;
+  const { doctorId, patientId, date, time, description } = req.body;
 
   try {
     const doctor = await Doctor.findById(doctorId);
@@ -150,6 +152,7 @@ router.post("/", async (req, res) => {
       patientId,
       date,
       time,
+      description,
       status: "booked",
     });
     await appointment.save();

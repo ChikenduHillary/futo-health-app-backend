@@ -12,4 +12,5 @@ const PatientSchema = new mongoose.Schema({
   accountType: { type: String, required: true },
 });
 
-module.exports = mongoose.model("Patient", PatientSchema);
+const Patient = mongoose.model("Patient", PatientSchema);
+module.exports = Patient;

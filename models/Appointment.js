@@ -22,6 +22,7 @@ const AppointmentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  description: { type: String },
 });
 
 module.exports = mongoose.model("Appointment", AppointmentSchema);
