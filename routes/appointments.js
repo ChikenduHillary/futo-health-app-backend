@@ -126,8 +126,10 @@ router.post("/", async (req, res) => {
 
   try {
     const doctor = await Doctor.findById(doctorId);
-    if (!doctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+    const patient = await Patient.findById(patientId);
+
+    if (!doctor || !patient) {
+      return res.status(404).json({ message: "Doctor or Patient not found" });
     }
 
     // Check if the slot is available
@@ -151,6 +153,20 @@ router.post("/", async (req, res) => {
       status: "booked",
     });
     await appointment.save();
+
+    // Create notifications for both doctor and patient
+    const doctorNotification = new Notification({
+      userId: doctorId,
+      message: `New appointment booked with ${patient.name} on ${date} at ${time}.`,
+    });
+
+    const patientNotification = new Notification({
+      userId: patientId,
+      message: `Your appointment with Dr. ${doctor.name} is booked on ${date} at ${time}.`,
+    });
+
+    await doctorNotification.save();
+    await patientNotification.save();
 
     res.status(201).json(appointment);
   } catch (err) {

@@ -24,12 +24,14 @@ const doctorRoutes = require("./routes/doctors");
 const patientRoutes = require("./routes/patients");
 const appointmentRoutes = require("./routes/appointments");
 const userRoutes = require("./routes/user");
+const notificationRoutes = require("./routes/notifications");
 
 // Use Routes
 app.use("/api/doctors", doctorRoutes);
 app.use("/api/patients", patientRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 5000;
