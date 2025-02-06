@@ -23,7 +23,7 @@ function generateSlots(doctor, date) {
   );
 
   for (let hour = startHour; hour < endHour; hour++) {
-    for (let minute of [0, 30]) {
+    for (let minute of [0, 15]) {
       const time = new Date();
       time.setHours(hour, minute, 0, 0);
 
