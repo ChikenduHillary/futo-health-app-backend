@@ -12,7 +12,7 @@ function generateSlots(doctor, date, bookedAppointments) {
   const endHour = 18; // 9:00 PM
 
   for (let hour = startHour; hour < endHour; hour++) {
-    for (let minute of [0, 15]) {
+    for (let minute of [0, 15, 30, 45]) {
       const time = new Date();
       time.setHours(hour, minute, 0, 0);
 
