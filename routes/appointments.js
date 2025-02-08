@@ -8,11 +8,11 @@ const Notification = require("../models/Notification");
 // Generate slots for a specific date
 function generateSlots(doctor, date, bookedAppointments) {
   const slots = [];
-  const startHour = 4; // 4:00 AM
-  const endHour = 21; // 9:00 PM
+  const startHour = 8; // 4:00 AM
+  const endHour = 18; // 9:00 PM
 
   for (let hour = startHour; hour < endHour; hour++) {
-    for (let minute of [0, 15, 30, 45]) {
+    for (let minute of [0, 15]) {
       const time = new Date();
       time.setHours(hour, minute, 0, 0);
 
@@ -24,20 +24,19 @@ function generateSlots(doctor, date, bookedAppointments) {
 
       // Check if this slot is already booked
       const isTaken = bookedAppointments.some(
-        app => app.time === timeString && app.status !== "cancelled"
+        (app) => app.time === timeString && app.status !== "cancelled"
       );
 
       slots.push({
         time: timeString,
         available: !isTaken,
-        isTaken: isTaken
+        isTaken: isTaken,
       });
     }
   }
 
   return slots;
 }
-
 
 // Get available and booked slots for a specific doctor and date
 router.get("/slots", async (req, res) => {
@@ -68,7 +67,7 @@ router.get("/slots", async (req, res) => {
     const bookedAppointments = await Appointment.find({
       doctorId,
       date,
-      status: { $ne: "cancelled" }
+      status: { $ne: "cancelled" },
     });
 
     // Generate all slots with availability status
@@ -76,13 +75,12 @@ router.get("/slots", async (req, res) => {
 
     return res.json({
       slots: slots,
-      bookedAppointments: bookedAppointments
+      bookedAppointments: bookedAppointments,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // Book an appointment
 router.post("/", async (req, res) => {
