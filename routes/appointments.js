@@ -121,11 +121,15 @@ router.post("/", async (req, res) => {
     const doctorNotification = new Notification({
       userId: doctorId,
       message: `New appointment booked with ${patient.name} on ${date} at ${time}.`,
+      doctorName: doctor.name,
+      patientName: doctor.patient,
     });
 
     const patientNotification = new Notification({
       userId: patientId,
       message: `Your appointment with Dr. ${doctor.name} is booked on ${date} at ${time}.`,
+      doctorName: doctor.name,
+      patientName: doctor.patient,
     });
 
     await doctorNotification.save();
