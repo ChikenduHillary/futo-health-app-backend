@@ -6,24 +6,13 @@ const Patient = require("../models/Patient");
 const Notification = require("../models/Notification");
 
 // Generate slots for a specific date
-function generateSlots(doctor, date) {
+function generateSlots(doctor, date, bookedAppointments) {
   const slots = [];
   const startHour = 4; // 4:00 AM
   const endHour = 21; // 9:00 PM
 
-  // Clear previous day's appointments
-  const today = new Date().toISOString().split("T")[0];
-  if (date !== today) {
-    doctor.availability = doctor.availability.filter((a) => a.date === today);
-  }
-
-  // Check existing booked appointments for the day
-  const bookedAppointments = doctor.appointments.filter(
-    (app) => app.date === date && app.status !== "cancelled"
-  );
-
   for (let hour = startHour; hour < endHour; hour++) {
-    for (let minute of [0, 15]) {
+    for (let minute of [0, 15, 30, 45]) {
       const time = new Date();
       time.setHours(hour, minute, 0, 0);
 
@@ -34,13 +23,14 @@ function generateSlots(doctor, date) {
       });
 
       // Check if this slot is already booked
-      const isBooked = bookedAppointments.some(
-        (app) => app.time === timeString
+      const isTaken = bookedAppointments.some(
+        app => app.time === timeString && app.status !== "cancelled"
       );
 
       slots.push({
         time: timeString,
-        available: !isBooked,
+        available: !isTaken,
+        isTaken: isTaken
       });
     }
   }
@@ -48,79 +38,51 @@ function generateSlots(doctor, date) {
   return slots;
 }
 
+
 // Get available and booked slots for a specific doctor and date
 router.get("/slots", async (req, res) => {
-  const { doctorId, patientId, date } = req.query;
+  const { doctorId, date } = req.query;
 
   try {
-    // Validate input: Ensure either doctorId or patientId is provided
-    if ((!doctorId && !patientId) || (doctorId && patientId)) {
-      return res.status(400).json({
-        message: "Please provide either doctorId or patientId, but not both.",
-      });
+    if (!doctorId) {
+      return res.status(400).json({ message: "doctorId is required." });
     }
 
-    // Validate ObjectId for doctorId or patientId
-    const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id); // Regex for MongoDB ObjectId
-
-    if (doctorId && !isValidObjectId(doctorId)) {
+    // Validate ObjectId
+    const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+    if (!isValidObjectId(doctorId)) {
       return res.status(400).json({ message: "Invalid doctorId format." });
-    }
-
-    if (patientId && !isValidObjectId(patientId)) {
-      return res.status(400).json({ message: "Invalid patientId format." });
     }
 
     if (!date) {
       return res.status(400).json({ message: "Date parameter is required." });
     }
 
-    if (doctorId) {
-      // Fetch doctor and their slots
-      const doctor = await Doctor.findById(doctorId);
-      if (!doctor) {
-        return res.status(404).json({ message: "Doctor not found." });
-      }
-
-      const slots = generateSlots(doctor, date);
-      const bookedAppointments = await Appointment.find({
-        doctorId,
-        date,
-        status: { $ne: "cancelled" },
-      });
-
-      return res.json({
-        type: "doctor",
-        availableSlots: slots.filter((slot) => slot.available),
-        bookedSlots: bookedAppointments,
-      });
+    // Fetch doctor
+    const doctor = await Doctor.findById(doctorId);
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor not found." });
     }
 
-    if (patientId) {
-      // Fetch appointments for the patient
-      const patientAppointments = await Appointment.find({
-        patientId,
-        date,
-      });
+    // Fetch booked appointments for the date
+    const bookedAppointments = await Appointment.find({
+      doctorId,
+      date,
+      status: { $ne: "cancelled" }
+    });
 
-      console.log(patientAppointments);
+    // Generate all slots with availability status
+    const slots = generateSlots(doctor, date, bookedAppointments);
 
-      if (!patientAppointments.length) {
-        return res.status(404).json({
-          message:
-            "No appointments found for this patient on the selected date.",
-        });
-      }
-
-      return res.json({
-        type: "patient",
-        appointments: patientAppointments,
-      });
-    }
+    return res.json({
+      slots: slots,
+      bookedAppointments: bookedAppointments
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Book an appointment
 router.post("/", async (req, res) => {
